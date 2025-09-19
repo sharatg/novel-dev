@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novel-writer"
+version = "0.1.0"
+description = "AI-powered novel writing assistant using local LLMs"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "ollama>=0.2.0",
+    "requests>=2.31.0",
+    "pydantic>=2.5.0",
+    "rich>=13.7.0",
+    "click>=8.1.7",
+    "python-dotenv>=1.0.0",
+    "json-schema>=4.19.2"
+]
+
+[project.scripts]
+novel-writer = "src.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools.package-dir]
+"" = "."
