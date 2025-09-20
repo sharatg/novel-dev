@@ -60,6 +60,20 @@ class LLMInterface:
     def is_available(self) -> bool:
         try:
             models = self.client.list()
-            return any(model['name'] == self.model for model in models['models'])
-        except Exception:
+            available_models = [model['name'] for model in models['models']]
+
+            # Check for exact match first
+            if self.model in available_models:
+                return True
+
+            # Check for partial matches (e.g., "llama3.1:8b" might be listed as "llama3.1")
+            model_base = self.model.split(':')[0]
+            for available_model in available_models:
+                if model_base in available_model or available_model in self.model:
+                    return True
+
+            print(f"Model '{self.model}' not found. Available models: {available_models}")
+            return False
+        except Exception as e:
+            print(f"Error connecting to Ollama: {e}")
             return False
