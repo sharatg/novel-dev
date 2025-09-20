@@ -318,5 +318,3 @@ See [LICENSE](LICENSE) file for full details.
 ## 🌟 Star History
 
 If this project helped you write your story, please consider giving it a star! ⭐
-
-**Made with ❤️ for writers who dream big**
