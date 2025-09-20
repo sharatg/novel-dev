@@ -55,7 +55,7 @@ $ python -m src.main new "space-opera" --story-type novel --genre "science ficti
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/novel-writer-ai.git
+   git clone https://github.com/sharatg/novel-dev.git
    cd novel-writer-ai
    ```
 
@@ -318,5 +318,3 @@ See [LICENSE](LICENSE) file for full details.
 ## 🌟 Star History
 
 If this project helped you write your story, please consider giving it a star! ⭐
-
-**Made with ❤️ for writers who dream big**
