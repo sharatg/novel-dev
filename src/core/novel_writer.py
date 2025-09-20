@@ -30,6 +30,19 @@ class NovelWriter:
 
         analysis = self.analyzer.analyze_story(prompt)
 
+        # Save the initial project state with prompt and analysis
+        initial_context = {
+            "prompt": prompt.model_dump(),
+            "analysis": analysis.model_dump(),
+            "stage": "questions"
+        }
+
+        # Save to a temporary file until outline is created
+        import json
+        temp_file = os.path.join(self.project_path, "temp_project_state.json")
+        with open(temp_file, 'w') as f:
+            json.dump(initial_context, f, indent=2)
+
         return {
             "analysis": analysis,
             "questions": analysis.questions,
@@ -38,20 +51,43 @@ class NovelWriter:
         }
 
     def answer_questions(self, answers: Dict[str, str]) -> StoryOutline:
+        # Try to load existing context first
         context = self.context_manager.load_context()
+
         if not context:
-            raise Exception("No active project found. Please start a new project first.")
+            # Load from temporary project state
+            import json
+            temp_file = os.path.join(self.project_path, "temp_project_state.json")
 
-        # Load the original prompt (you might want to save this in context)
-        # For now, we'll create a basic prompt
-        prompt = StoryPrompt(content="Story from previous analysis")
+            if not os.path.exists(temp_file):
+                raise Exception("No active project found. Please start a new project first.")
 
-        # Load the previous analysis (you might want to save this too)
-        analysis = self.analyzer.analyze_story(prompt)  # This is a simplification
+            with open(temp_file, 'r') as f:
+                temp_state = json.load(f)
+
+            # Reconstruct the original prompt and analysis
+            prompt = StoryPrompt(**temp_state["prompt"])
+
+            # Reconstruct the analysis object
+            from ..core.models import StoryAnalysis, StoryGap, StoryQuestion
+            analysis_data = temp_state["analysis"]
+            gaps = [StoryGap(**gap) for gap in analysis_data["gaps"]]
+            questions = [StoryQuestion(**q) for q in analysis_data["questions"]]
+
+            analysis = StoryAnalysis(
+                gaps=gaps,
+                questions=questions,
+                strengths=analysis_data["strengths"],
+                genre_analysis=analysis_data.get("genre_analysis"),
+                complexity_score=analysis_data["complexity_score"]
+            )
+        else:
+            # This shouldn't happen in normal flow, but handle it
+            raise Exception("Project already has an outline. Use revision methods instead.")
 
         outline = self.outline_creator.create_outline(prompt, analysis, answers)
 
-        # Create and save initial context
+        # Create and save proper story context
         story_context = StoryContext(
             outline=outline,
             plot_threads={
@@ -60,6 +96,10 @@ class NovelWriter:
             }
         )
         self.context_manager.save_context(story_context)
+
+        # Clean up temporary file
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
         return outline
 
