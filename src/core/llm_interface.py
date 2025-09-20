@@ -1,9 +1,11 @@
 import ollama
 import json
 import requests
+import traceback
 from typing import Dict, Any, Optional
 import os
 from dotenv import load_dotenv
+from ..utils.logger import logger
 
 load_dotenv()
 
@@ -21,11 +23,17 @@ class LLMInterface:
     def generate(self, prompt: str, system_prompt: Optional[str] = None,
                  temperature: float = 0.7, max_tokens: Optional[int] = None) -> str:
         try:
+            logger.debug(f"Generating text with model: {self.model}")
+            logger.debug(f"Prompt length: {len(prompt)} chars")
+            logger.debug(f"Temperature: {temperature}, Max tokens: {max_tokens}")
+
             messages = []
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
+                logger.debug(f"System prompt length: {len(system_prompt)} chars")
             messages.append({"role": "user", "content": prompt})
 
+            logger.debug(f"Sending request to Ollama at {self.host}")
             response = self.client.chat(
                 model=self.model,
                 messages=messages,
@@ -34,26 +42,53 @@ class LLMInterface:
                     "num_predict": max_tokens or -1
                 }
             )
-            return response['message']['content']
+
+            content = response['message']['content']
+            logger.debug(f"Generated response length: {len(content)} chars")
+            return content
+
         except Exception as e:
-            raise Exception(f"LLM generation failed: {str(e)}")
+            error_msg = f"LLM generation failed with model '{self.model}' at {self.host}"
+            logger.error(f"{error_msg}: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            logger.error(f"Prompt was: {prompt[:200]}..." if len(prompt) > 200 else f"Prompt was: {prompt}")
+            raise Exception(f"{error_msg}: {str(e)}")
 
     def generate_structured(self, prompt: str, schema: Dict[str, Any],
                           system_prompt: Optional[str] = None) -> Dict[str, Any]:
-        json_prompt = f"{prompt}\n\nRespond with valid JSON matching this schema:\n{json.dumps(schema, indent=2)}"
-
-        if system_prompt:
-            full_system = f"{system_prompt}\n\nIMPORTANT: Your response must be valid JSON only, no additional text."
-        else:
-            full_system = "IMPORTANT: Your response must be valid JSON only, no additional text."
-
-        response = self.generate(json_prompt, full_system, temperature=0.3)
-
         try:
-            return json.loads(response.strip())
-        except json.JSONDecodeError:
-            cleaned = self._extract_json(response)
-            return json.loads(cleaned)
+            logger.debug("Generating structured response")
+            logger.debug(f"Schema keys: {list(schema.get('properties', {}).keys())}")
+
+            json_prompt = f"{prompt}\n\nRespond with valid JSON matching this schema:\n{json.dumps(schema, indent=2)}"
+
+            if system_prompt:
+                full_system = f"{system_prompt}\n\nIMPORTANT: Your response must be valid JSON only, no additional text."
+            else:
+                full_system = "IMPORTANT: Your response must be valid JSON only, no additional text."
+
+            response = self.generate(json_prompt, full_system, temperature=0.3)
+            logger.debug(f"Raw LLM response: {response[:500]}...")
+
+            try:
+                parsed = json.loads(response.strip())
+                logger.debug("Successfully parsed JSON response")
+                return parsed
+            except json.JSONDecodeError as e:
+                logger.warning(f"Initial JSON parsing failed: {e}")
+                logger.debug("Attempting to extract JSON from response")
+                cleaned = self._extract_json(response)
+                logger.debug(f"Extracted JSON: {cleaned[:500]}...")
+                parsed = json.loads(cleaned)
+                logger.debug("Successfully parsed extracted JSON")
+                return parsed
+
+        except Exception as e:
+            logger.error(f"Structured generation failed: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            logger.error(f"Schema was: {json.dumps(schema, indent=2)}")
+            logger.error(f"Response was: {response if 'response' in locals() else 'No response generated'}")
+            raise Exception(f"Structured generation failed: {str(e)}")
 
     def _extract_json(self, text: str) -> str:
         text = text.strip()

@@ -1,4 +1,5 @@
 import click
+import traceback
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -10,6 +11,7 @@ import os
 
 from ..core.novel_writer import NovelWriter
 from ..core.models import StoryPrompt, StoryType
+from ..utils.logger import logger
 
 console = Console()
 
@@ -48,6 +50,7 @@ def new(project_name: str, story_type: str, genre: str, target_length: int):
     )
 
     try:
+        logger.info(f"Starting new project: {project_name}")
         result = writer.start_new_project(prompt)
 
         console.print("\n[green]✓ Story analyzed successfully![/green]")
@@ -55,7 +58,10 @@ def new(project_name: str, story_type: str, genre: str, target_length: int):
         _handle_questions(writer, result['questions'])
 
     except Exception as e:
+        logger.error(f"Failed to start new project: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         console.print(f"[bold red]Error: {str(e)}[/bold red]")
+        console.print(f"[dim]Check logs/novel_writer.log for detailed error information[/dim]")
 
 def _display_analysis(result: Dict[str, Any]) -> None:
     analysis = result['analysis']
@@ -93,12 +99,16 @@ def _handle_questions(writer: NovelWriter, questions) -> None:
     console.print("\n[blue]Generating story outline...[/blue]")
 
     try:
+        logger.info("Processing question answers and creating outline")
         outline = writer.answer_questions(answers)
         _display_outline(outline)
         _handle_outline_approval(writer, outline)
 
     except Exception as e:
-        console.print(f"[bold red]Error: {str(e)}[/bold red]")
+        logger.error(f"Failed to create outline: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        console.print(f"[bold red]Error creating outline: {str(e)}[/bold red]")
+        console.print(f"[dim]Check logs/novel_writer.log for detailed error information[/dim]")
 
 def _display_outline(outline) -> None:
     console.print(f"\n[bold green]Story Outline: {outline.title}[/bold green]")

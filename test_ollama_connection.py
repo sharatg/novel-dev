@@ -7,6 +7,10 @@ import sys
 import os
 sys.path.append('src')
 
+# Set up verbose logging for testing
+import logging
+logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
+
 from src.core.llm_interface import LLMInterface
 
 def test_ollama_connection():

@@ -1,6 +1,8 @@
 from typing import Dict, Any
+import traceback
 from ..core.models import StoryPrompt, StoryAnalysis, StoryOutline, Chapter
 from ..core.llm_interface import LLMInterface
+from ..utils.logger import logger
 
 class OutlineCreator:
     def __init__(self, llm: LLMInterface):
@@ -83,20 +85,47 @@ Create a comprehensive outline with:
             "required": ["title", "premise", "theme", "main_characters", "setting", "chapters", "total_word_count", "genre"]
         }
 
-        result = self.llm.generate_structured(outline_prompt, schema, system_prompt)
+        try:
+            logger.debug("Generating story outline with LLM")
+            result = self.llm.generate_structured(outline_prompt, schema, system_prompt)
+            logger.debug(f"LLM returned outline with keys: {list(result.keys())}")
 
-        chapters = [Chapter(**chapter) for chapter in result["chapters"]]
+            # Validate required fields
+            required_fields = ["title", "premise", "theme", "main_characters", "setting", "chapters", "total_word_count", "genre"]
+            missing_fields = [field for field in required_fields if field not in result]
+            if missing_fields:
+                raise ValueError(f"Missing required fields in outline: {missing_fields}")
 
-        return StoryOutline(
-            title=result["title"],
-            premise=result["premise"],
-            theme=result["theme"],
-            main_characters=result["main_characters"],
-            setting=result["setting"],
-            chapters=chapters,
-            total_word_count=result["total_word_count"],
-            genre=result["genre"]
-        )
+            logger.debug(f"Creating {len(result['chapters'])} chapters")
+            chapters = []
+            for i, chapter_data in enumerate(result["chapters"]):
+                try:
+                    logger.debug(f"Processing chapter {i+1}: {chapter_data.get('title', 'No title')}")
+                    chapter = Chapter(**chapter_data)
+                    chapters.append(chapter)
+                except Exception as e:
+                    logger.error(f"Failed to create chapter {i+1}: {e}")
+                    logger.error(f"Chapter data was: {chapter_data}")
+                    raise Exception(f"Failed to create chapter {i+1}: {e}")
+
+            logger.debug("Successfully created all chapters, building StoryOutline")
+            return StoryOutline(
+                title=result["title"],
+                premise=result["premise"],
+                theme=result["theme"],
+                main_characters=result["main_characters"],
+                setting=result["setting"],
+                chapters=chapters,
+                total_word_count=result["total_word_count"],
+                genre=result["genre"]
+            )
+
+        except Exception as e:
+            logger.error(f"Outline creation failed: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            if 'result' in locals():
+                logger.error(f"LLM result was: {result}")
+            raise Exception(f"Outline creation failed: {str(e)}")
 
     def revise_outline(self, outline: StoryOutline, feedback: str) -> StoryOutline:
         system_prompt = """Revise the story outline based on user feedback.
