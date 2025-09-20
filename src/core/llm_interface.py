@@ -1,5 +1,6 @@
 import ollama
 import json
+import requests
 from typing import Dict, Any, Optional
 import os
 from dotenv import load_dotenv
@@ -10,7 +11,12 @@ class LLMInterface:
     def __init__(self):
         self.host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
         self.model = os.getenv('OLLAMA_MODEL', 'llama3.1:8b')
-        self.client = ollama.Client(host=self.host)
+        # Try different client initialization methods
+        try:
+            self.client = ollama.Client(host=self.host)
+        except:
+            # Fallback to default client
+            self.client = ollama.Client()
 
     def generate(self, prompt: str, system_prompt: Optional[str] = None,
                  temperature: float = 0.7, max_tokens: Optional[int] = None) -> str:
@@ -59,21 +65,50 @@ class LLMInterface:
 
     def is_available(self) -> bool:
         try:
-            models = self.client.list()
-            available_models = [model['name'] for model in models['models']]
+            # First check if Ollama server is reachable via HTTP
+            response = requests.get(f"{self.host}/api/tags", timeout=5)
+            if response.status_code != 200:
+                print(f"Ollama server not reachable at {self.host}")
+                return False
+
+            # Try to get models using the client
+            try:
+                models = self.client.list()
+                available_models = [model['name'] for model in models['models']]
+            except:
+                # Fallback: try direct API call
+                models_response = requests.get(f"{self.host}/api/tags", timeout=5)
+                if models_response.status_code == 200:
+                    models_data = models_response.json()
+                    available_models = [model['name'] for model in models_data.get('models', [])]
+                else:
+                    print("Could not retrieve model list from Ollama")
+                    return False
+
+            print(f"Available models: {available_models}")
 
             # Check for exact match first
             if self.model in available_models:
+                print(f"✅ Found exact match for model: {self.model}")
                 return True
 
             # Check for partial matches (e.g., "llama3.1:8b" might be listed as "llama3.1")
             model_base = self.model.split(':')[0]
             for available_model in available_models:
-                if model_base in available_model or available_model in self.model:
+                if model_base in available_model or available_model.startswith(model_base):
+                    print(f"✅ Found compatible model: {available_model} for requested {self.model}")
+                    # Update our model to use the available one
+                    self.model = available_model
                     return True
 
-            print(f"Model '{self.model}' not found. Available models: {available_models}")
+            print(f"❌ Model '{self.model}' not found. Available models: {available_models}")
+            print(f"💡 Try: ollama pull {self.model}")
+            return False
+
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Cannot connect to Ollama at {self.host}: {e}")
+            print("💡 Make sure Ollama is running: ollama serve")
             return False
         except Exception as e:
-            print(f"Error connecting to Ollama: {e}")
+            print(f"❌ Unexpected error checking Ollama: {e}")
             return False
