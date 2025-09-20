@@ -55,7 +55,7 @@ $ python -m src.main new "space-opera" --story-type novel --genre "science ficti
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/novel-writer-ai.git
+   git clone https://github.com/sharatg/novel-writer-ai.git
    cd novel-writer-ai
    ```
 
